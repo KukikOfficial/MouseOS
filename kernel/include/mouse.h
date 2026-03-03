@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+// Оборачиваем для совместимости имен C и C++
 extern "C" {
     void init_mouse_driver();
     void mouse_handler_main();

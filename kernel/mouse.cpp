@@ -6,31 +6,61 @@
 int mouse_x = 512, mouse_y = 384;
 int old_x = 512, old_y = 384;
 uint8_t mouse_cycle = 0;
-int8_t mouse_data[3]; 
+int8_t mouse_data[3]; // Пакет из 3 байт
 bool left_clicked = false;
 bool menu_open = false;
 
 extern "C" {
 
-// Функция восстановления графики под старым курсором
+void mouse_wait(uint8_t type) {
+    uint32_t timeout = 100000;
+    if (type == 0) {
+        while (timeout--) { if ((inb(0x64) & 1) == 1) return; }
+    } else {
+        while (timeout--) { if ((inb(0x64) & 2) == 0) return; }
+    }
+}
+
+void mouse_write(uint8_t write) {
+    mouse_wait(1);
+    outb(0x64, 0xD4);
+    mouse_wait(1);
+    outb(0x60, write);
+}
+
+void init_mouse_driver() {
+    uint8_t status;
+    mouse_wait(1);
+    outb(0x64, 0xA8); 
+    mouse_wait(1);
+    outb(0x64, 0x20); 
+    mouse_wait(0);
+    status = (inb(0x60) | 2);
+    mouse_wait(1);
+    outb(0x64, 0x60); 
+    mouse_wait(1);
+    outb(0x60, status);
+    mouse_write(0xF4); 
+}
+
 void redraw_interface_at(int x, int y) {
-    // 1. Сначала рисуем чистый фон рабочего стола
+    // Стираем область под старым курсором (фон)
     draw_rect(x, y, 14, 14, 0x1A2B3C); 
 
-    // 2. Если мы задели главное окно (150, 100, 724, 500)
+    // Восстанавливаем окно Mouse Core
     if (x + 14 > 150 && x < 874 && y + 14 > 100 && y < 600) {
-        draw_rect(150, 100, 724, 500, 0xCCCCCC); // Тело
-        draw_rect(150, 100, 724, 32, 0x0055AA);  // Заголовок
+        draw_rect(150, 100, 724, 500, 0xCCCCCC);
+        draw_rect(150, 100, 724, 32, 0x0055AA);
         draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
     }
 
-    // 3. Если задели панель задач (внизу)
+    // Восстанавливаем панель задач
     if (y + 14 > 730) {
         draw_rect(0, 730, 1024, 38, 0x222222);
         draw_string(10, 742, "[ START ]", 0xFFFFFF);
     }
 
-    // 4. Если задели открытое меню
+    // Восстанавливаем меню (если открыто)
     if (menu_open && x < 200 && y + 14 > 530 && y < 730) {
         draw_rect(0, 530, 200, 200, 0x444444);
         draw_string(10, 550, "> SYSTEM", 0xFFFFFF);
@@ -71,17 +101,23 @@ void mouse_handler_main() {
         if (mouse_x > 1010) mouse_x = 1010;
         if (mouse_y > 754) mouse_y = 754;
 
-        // Логика клика по меню ПУСК
+        // Клик по кнопке ПУСК
         if (left_clicked && mouse_x < 100 && mouse_y > 730) {
             menu_open = !menu_open;
-            // Рисуем меню сразу (форсированно)
             if (menu_open) {
                 draw_rect(0, 530, 200, 200, 0x444444);
                 draw_string(10, 550, "> SYSTEM", 0xFFFFFF);
                 draw_string(10, 580, "> REBOOT", 0xFFFFFF);
             } else {
-                draw_rect(0, 530, 200, 200, 0x1A2B3C); // Стираем меню
+                draw_rect(0, 530, 200, 200, 0x1A2B3C); // Стереть меню
             }
+        }
+        
+        // Клик по REBOOT внутри меню
+        if (left_clicked && menu_open && mouse_x < 200 && mouse_y > 570 && mouse_y < 600) {
+            draw_string(10, 680, "REBOOTING...", 0xFF0000);
+            for(volatile int i=0; i<5000000; i++);
+            outb(0x64, 0xFE); // Команда перезагрузки
         }
 
         update_mouse_cursor();
@@ -93,11 +129,8 @@ void mouse_handler_main() {
 
 void update_mouse_cursor() {
     redraw_interface_at(old_x, old_y);
-    
-    // Рисуем белый уголок-курсор
     draw_rect(mouse_x, mouse_y, 2, 12, 0xFFFFFF);
     draw_rect(mouse_x, mouse_y, 12, 2, 0xFFFFFF);
-    
     old_x = mouse_x;
     old_y = mouse_y;
 }
