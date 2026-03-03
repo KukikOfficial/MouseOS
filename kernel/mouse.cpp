@@ -14,44 +14,44 @@ bool explorer_open = false;
 
 extern "C" {
 
-// Работа с часами RTC
+void draw_explorer(); // из explorer.cpp
+
 uint8_t get_rtc(int reg) { outb(0x70, reg); return inb(0x71); }
 int bcd_to_bin(uint8_t bcd) { return ((bcd >> 4) * 10) + (bcd & 0x0F); }
 
 void draw_clock() {
     int h = bcd_to_bin(get_rtc(0x04));
     int m = bcd_to_bin(get_rtc(0x02));
-    char t[6] = {(char)(h/10+'0'), (char)(h%10+'0'), ':', (char)(m/10+'0'), (char)(m%10+'0'), 0};
+    char t[6];
+    t[0] = (h/10) + '0'; t[1] = (h%10) + '0'; t[2] = ':';
+    t[3] = (m/10) + '0'; t[4] = (m%10) + '0'; t[5] = '\0';
     draw_string(960, 742, t, 0x00FF00);
 }
 
-// Перерисовка элементов интерфейса под курсором
-void redraw_at(int x, int y) {
-    draw_rect(x, y, 14, 14, 0x1A2B3C); // Фон
+void redraw_interface_at(int x, int y) {
+    draw_rect(x, y, 16, 16, 0x1A2B3C); // Стираем курсор
 
     // Окно консоли
-    if (x+14 > 150 && x < 874 && y+14 > 100 && y < 600) {
+    if (x+16 > 150 && x < 874 && y+16 > 100 && y < 600) {
         draw_rect(150, 100, 724, 500, 0xCCCCCC);
         draw_rect(150, 100, 724, 32, 0x0055AA);
-        draw_string(160, 108, "Mouse OS Console", 0xFFFFFF);
+        draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
     }
 
-    // Проводник
-    if (explorer_open && x+14 > 300 && x < 700 && y+14 > 200 && y < 500) {
-        draw_rect(300, 200, 400, 300, 0xEEEEEE);
-        draw_rect(300, 200, 400, 25, 0x333333);
-        draw_string(310, 205, "File Explorer", 0xFFFFFF);
+    // Окно проводника
+    if (explorer_open && x+16 > 300 && x < 720 && y+16 > 200 && y < 520) {
+        draw_explorer();
     }
 
     // Панель задач
-    if (y+14 > 730) {
+    if (y+16 > 730) {
         draw_rect(0, 730, 1024, 38, 0x222222);
         draw_string(10, 742, "[ START ]", 0xFFFFFF);
         draw_clock();
     }
 
-    // Меню ПУСК
-    if (menu_open && x < 200 && y+14 > 530 && y < 730) {
+    // Меню
+    if (menu_open && x < 200 && y+16 > 530 && y < 730) {
         draw_rect(0, 530, 200, 200, 0x444444);
         draw_string(10, 550, "> FILES", 0xFFFFFF);
         draw_string(10, 580, "> REBOOT", 0xFFFFFF);
@@ -77,31 +77,36 @@ void mouse_handler_main() {
         if (mouse_data[0] & 0x20) rel_y |= 0xFFFFFF00;
 
         mouse_x += rel_x; mouse_y -= rel_y;
-        if (mouse_x < 0) mouse_x = 0; if (mouse_y < 0) mouse_y = 0;
-        if (mouse_x > 1010) mouse_x = 1010; if (mouse_y > 754) mouse_y = 754;
 
-        // Обработка клика Пуск
-        if (left_clicked && mouse_x < 100 && mouse_y > 730) {
-            menu_open = !menu_open;
-            clear_screen(0x1A2B3C); // Форсированный сброс для чистоты
+        if (mouse_x < 0) mouse_x = 0; 
+        if (mouse_y < 0) mouse_y = 0;
+        if (mouse_x > 1010) mouse_x = 1010; 
+        if (mouse_y > 754) mouse_y = 754;
+
+        if (left_clicked) {
+            // Клик по ПУСК
+            if (mouse_x < 100 && mouse_y > 730) {
+                menu_open = !menu_open;
+                clear_screen(0x1A2B3C); 
+            }
+            // Клик по FILES
+            else if (menu_open && mouse_x < 200 && mouse_y > 540 && mouse_y < 570) {
+                explorer_open = !explorer_open;
+                menu_open = false;
+                clear_screen(0x1A2B3C);
+            }
+            // Клик по REBOOT
+            else if (menu_open && mouse_x < 200 && mouse_y > 575 && mouse_y < 605) {
+                outb(0x64, 0xFE);
+            }
+            // Закрытие проводника (крестик)
+            else if (explorer_open && mouse_x > 695 && mouse_x < 715 && mouse_y > 205 && mouse_y < 225) {
+                explorer_open = false;
+                clear_screen(0x1A2B3C);
+            }
         }
 
-        // Клик по FILES в меню
-        if (left_clicked && menu_open && mouse_x < 200 && mouse_y > 540 && mouse_y < 570) {
-            explorer_open = !explorer_open;
-            menu_open = false;
-            clear_screen(0x1A2B3C);
-        }
-
-        // Клик по REBOOT
-        if (left_clicked && menu_open && mouse_x < 200 && mouse_y > 575 && mouse_y < 600) {
-            outb(0x64, 0xFE);
-        }
-
-        redraw_at(old_x, old_y);
-        draw_rect(mouse_x, mouse_y, 2, 12, 0xFFFFFF);
-        draw_rect(mouse_x, mouse_y, 12, 2, 0xFFFFFF);
-        old_x = mouse_x; old_y = mouse_y;
+        update_mouse_cursor();
     }
     outb(0xA0, 0x20); outb(0x20, 0x20);
 }
@@ -112,6 +117,13 @@ void init_mouse_driver() {
     status = (inb(0x60) | 2);
     outb(0x64, 0x60); outb(0x60, status);
     outb(0x64, 0xD4); outb(0x60, 0xF4);
+}
+
+void update_mouse_cursor() {
+    redraw_interface_at(old_x, old_y);
+    draw_rect(mouse_x, mouse_y, 2, 12, 0xFFFFFF);
+    draw_rect(mouse_x, mouse_y, 12, 2, 0xFFFFFF);
+    old_x = mouse_x; old_y = mouse_y;
 }
 
 } // extern "C"
