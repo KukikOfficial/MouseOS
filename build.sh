@@ -58,10 +58,11 @@ ${CC} ${CFLAGS} -c kernel/memory.cpp -o build/obj/memory.o
 ${CC} ${CFLAGS} -c kernel/vesa.cpp -o build/obj/vesa.o
 ${CC} ${CFLAGS} -c kernel/font.cpp -o build/obj/font.o
 ${CC} ${CFLAGS} -c kernel/mouse.cpp -o build/obj/mouse.o
+${CC} ${CFLAGS} -c kernel/explorer.cpp -o build/obj/explorer.o
 
 echo "Компоновка ядра..."
 # Собираем все .o файлы в один бинарный файл ядра
-${CC} ${LDFLAGS} -o build/iso/boot/myos.bin build/obj/boot.o build/obj/kernel.o build/obj/vga.o build/obj/keyboard.o build/obj/idt.o build/obj/fs.o build/obj/ata.o build/obj/memory.o build/obj/vesa.o build/obj/font.o build/obj/mouse.o
+${CC} ${LDFLAGS} -o build/iso/boot/myos.bin build/obj/boot.o build/obj/kernel.o build/obj/vga.o build/obj/keyboard.o build/obj/idt.o build/obj/fs.o build/obj/ata.o build/obj/memory.o build/obj/vesa.o build/obj/font.o build/obj/mouse.o build/obj/explorer.o
 
 echo "Создание конфигурации GRUB..."
 # add a sample module file that will be loaded by GRUB
