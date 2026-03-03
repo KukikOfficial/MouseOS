@@ -1,0 +1,76 @@
+name: Build MouseCore
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build:
+    name: Build ISO
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          nasm \
+          grub-pc-bin \
+          grub-common \
+          xorriso \
+          mtools \
+          unzip
+    
+    - name: Download i686-elf toolchain
+      run: |
+        # Download and extract pre-built i686-elf toolchain
+        cd /tmp
+        wget https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-linux.zip
+        unzip i686-elf-tools-linux.zip -d i686-elf-tools
+        echo "/tmp/i686-elf-tools/bin" >> $GITHUB_PATH
+    
+    - name: Verify toolchain
+      run: |
+        which i686-elf-gcc
+        i686-elf-gcc --version
+        which nasm
+        nasm -version
+    
+    - name: Build kernel
+      run: bash build.sh
+    
+    - name: Upload ISO artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: mouseos-iso
+        path: build/myos.iso
+        retention-days: 30
+    
+    - name: Create release notes
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "## GoldMouse OS Build" > release_notes.md
+        echo "Build date: $(date)" >> release_notes.md
+        echo "Commit: ${{ github.sha }}" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Features:" >> release_notes.md
+        echo "- VGA text mode driver with 16 colors" >> release_notes.md
+        echo "- Preemptive multitasking with PIT timer" >> release_notes.md
+        echo "- USB HID keyboard (stub with demo)" >> release_notes.md
+        echo "- Module-based filesystem (GRUB multiboot)" >> release_notes.md
+        echo "- Interrupt handling (IDT, PIC)" >> release_notes.md
+    
+    - name: Upload release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/myos.iso
+        body_path: release_notes.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
