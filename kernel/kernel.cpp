@@ -11,39 +11,25 @@ extern "C" uint32_t end;
 
 extern "C" void kmain(uint32_t magic, uint32_t addr) {
     (void)magic;
+    uint32_t* fb = (uint32_t*)(*(uint32_t*)(addr + 88));
+    init_graphics(fb);
 
-    // 1. Базовая инициализация
-    init_memory((uint32_t)&end);
-    init_idt(); 
-    init_mouse_fs();
+    // Фон Mouse OS
+    clear_screen(0x1A2B3C); 
 
-    // 2. ИСПРАВЛЕНИЕ БАГА ГРАФИКИ:
-    // В Multiboot Info адрес LFB обычно лежит по смещению 88 байт.
-    // Мы читаем указатель на структуру, а из неё - физический адрес.
-    uint32_t* fb_ptr = (uint32_t*)(*(uint32_t*)(addr + 88));
+    // Стартовый интерфейс (должен совпадать с redraw_interface_at)
+    draw_rect(150, 100, 724, 500, 0xCCCCCC); 
+    draw_rect(150, 100, 724, 32, 0x0055AA);  
+    draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
 
-    if (fb_ptr != 0) {
-        init_graphics(fb_ptr);
-        
-        // Рисуем фон рабочего стола Mouse OS
-        clear_screen(0x1A2B3C); 
+    // Панель задач
+    draw_rect(0, 730, 1024, 38, 0x222222);
+    draw_string(10, 742, "[ START ]", 0xFFFFFF);
 
-        // Тестовое окно
-        draw_rect(100, 100, 400, 250, 0xCCCCCC); // Тело
-        draw_rect(100, 100, 400, 30, 0x0055AA);  // Заголовок
-        
-        // Текст (используем наш switch-шрифт)
-        draw_string(110, 110, "MOUSE OS CORE", 0xFFFFFF);
-        draw_string(120, 150, "STATUS: GRAPHICS ACTIVE", 0x000000);
-        draw_string(120, 170, "MOUSE DRIVER: LOADING...", 0x333333);
-    }
-
-    // 3. Запуск мыши
+    init_idt();
     init_mouse_driver();
 
-    // Главный цикл
     while (1) {
-        // Мышь будет обновляться через прерывания IRQ12
         __asm__ __volatile__ ("hlt");
     }
 }
