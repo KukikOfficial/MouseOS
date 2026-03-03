@@ -57,7 +57,7 @@ ${CC} ${CFLAGS} -c kernel/ata.cpp -o build/obj/ata.o
 ${CC} ${CFLAGS} -c kernel/memory.cpp -o build/obj/memory.o
 ${CC} ${CFLAGS} -c kernel/vesa.cpp -o build/obj/vesa.o
 ${CC} ${CFLAGS} -c kernel/font.cpp -o build/obj/font.o
-${CC} ${CFLAGS} -c kernel/mouse.cpp -o build/obj/mouse.cpp
+${CC} ${CFLAGS} -c kernel/mouse.cpp -o build/obj/mouse.o
 
 echo "Компоновка ядра..."
 # Собираем все .o файлы в один бинарный файл ядра
