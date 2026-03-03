@@ -61,24 +61,32 @@ void mouse_handler_main() {
     if (mouse_cycle == 3) {
         mouse_cycle = 0;
 
-        // ПРОВЕРКА КНОПОК (1-й байт, бит 0 - левая кнопка)
-        left_clicked = (mouse_data[0] & 0x01);
+        // 1-й байт пакета содержит флаги и знаки
+        uint8_t flags = mouse_data[0];
+        
+        // Получаем "сырые" смещения
+        int32_t rel_x = (int32_t)mouse_data[1];
+        int32_t rel_y = (int32_t)mouse_data[2];
 
-        int rel_x = (int)mouse_data[1];
-        int rel_y = (int)mouse_data[2];
+        // Если установлен 4-й бит (0x10) — X отрицательный
+        if (flags & 0x10) rel_x |= 0xFFFFFF00;
+        
+        // Если установлен 5-й бит (0x20) — Y отрицательный
+        // ВАЖНО: В VirtualBox смещение Y часто требует инверсии
+        if (flags & 0x20) rel_y |= 0xFFFFFF00;
 
-        if (mouse_data[0] & 0x10) rel_x -= 256;
-        if (mouse_data[0] & 0x20) rel_y -= 256;
-
+        // Обновляем координаты Mouse OS
         mouse_x += rel_x;
-        mouse_y -= rel_y;
+        mouse_y -= rel_y; // Инвертируем Y, так как в PS/2 "вверх" это плюс
 
+        // Жесткие границы (чтобы не "прилипало" навсегда)
         if (mouse_x < 0) mouse_x = 0;
         if (mouse_y < 0) mouse_y = 0;
-        if (mouse_x > 1010) mouse_x = 1010;
-        if (mouse_y > 750) mouse_y = 750;
+        if (mouse_x > 1022) mouse_x = 1022;
+        if (mouse_y > 766) mouse_y = 766;
 
         update_mouse_cursor();
+
     }
 
     outb(0xA0, 0x20);
