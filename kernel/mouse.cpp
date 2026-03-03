@@ -6,12 +6,67 @@
 int mouse_x = 512, mouse_y = 384;
 int old_x = 512, old_y = 384;
 uint8_t mouse_cycle = 0;
-int8_t mouse_data[3]; // Пакет из 3 байт
+int8_t mouse_data[3]; 
 bool left_clicked = false;
 bool menu_open = false;
 
 extern "C" {
 
+// --- РАБОТА СО ВРЕМЕНЕМ (RTC) ---
+uint8_t get_rtc_register(int reg) {
+    outb(0x70, reg);
+    return inb(0x71);
+}
+
+int bcd_to_bin(uint8_t bcd) {
+    return ((bcd >> 4) * 10) + (bcd & 0x0F);
+}
+
+void draw_clock() {
+    // Читаем часы и минуты из чипа CMOS
+    int hours = bcd_to_bin(get_rtc_register(0x04));
+    int mins  = bcd_to_bin(get_rtc_register(0x02));
+    
+    char time_str[6];
+    time_str[0] = (hours / 10) + '0';
+    time_str[1] = (hours % 10) + '0';
+    time_str[2] = ':';
+    time_str[3] = (mins / 10) + '0';
+    time_str[4] = (mins % 10) + '0';
+    time_str[5] = '\0';
+
+    // Отрисовка в правом углу панели задач
+    draw_string(950, 742, time_str, 0x00FF00); 
+}
+
+// --- ГРАФИКА И ИНТЕРФЕЙС ---
+void redraw_interface_at(int x, int y) {
+    // Стираем старую позицию курсора
+    draw_rect(x, y, 14, 14, 0x1A2B3C); 
+
+    // Восстановление окна Mouse Core
+    if (x + 14 > 150 && x < 874 && y + 14 > 100 && y < 600) {
+        draw_rect(150, 100, 724, 500, 0xCCCCCC);
+        draw_rect(150, 100, 724, 32, 0x0055AA);
+        draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
+    }
+
+    // Восстановление панели задач и часов
+    if (y + 14 > 730) {
+        draw_rect(0, 730, 1024, 38, 0x222222);
+        draw_string(10, 742, "[ START ]", 0xFFFFFF);
+        draw_clock(); // Часы перерисовываются при движении мыши
+    }
+
+    // Восстановление меню
+    if (menu_open && x < 200 && y + 14 > 530 && y < 730) {
+        draw_rect(0, 530, 200, 200, 0x444444);
+        draw_string(10, 550, "> SYSTEM", 0xFFFFFF);
+        draw_string(10, 580, "> REBOOT", 0xFFFFFF);
+    }
+}
+
+// --- ДРАЙВЕР МЫШИ ---
 void mouse_wait(uint8_t type) {
     uint32_t timeout = 100000;
     if (type == 0) {
@@ -43,31 +98,6 @@ void init_mouse_driver() {
     mouse_write(0xF4); 
 }
 
-void redraw_interface_at(int x, int y) {
-    // Стираем область под старым курсором (фон)
-    draw_rect(x, y, 14, 14, 0x1A2B3C); 
-
-    // Восстанавливаем окно Mouse Core
-    if (x + 14 > 150 && x < 874 && y + 14 > 100 && y < 600) {
-        draw_rect(150, 100, 724, 500, 0xCCCCCC);
-        draw_rect(150, 100, 724, 32, 0x0055AA);
-        draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
-    }
-
-    // Восстанавливаем панель задач
-    if (y + 14 > 730) {
-        draw_rect(0, 730, 1024, 38, 0x222222);
-        draw_string(10, 742, "[ START ]", 0xFFFFFF);
-    }
-
-    // Восстанавливаем меню (если открыто)
-    if (menu_open && x < 200 && y + 14 > 530 && y < 730) {
-        draw_rect(0, 530, 200, 200, 0x444444);
-        draw_string(10, 550, "> SYSTEM", 0xFFFFFF);
-        draw_string(10, 580, "> REBOOT", 0xFFFFFF);
-    }
-}
-
 void mouse_handler_main() {
     uint8_t status = inb(0x64);
     if (!(status & 0x01) || !(status & 0x20)) {
@@ -81,7 +111,7 @@ void mouse_handler_main() {
         return;
     }
 
-    mouse_data[mouse_cycle++] = mouse_byte;
+    mouse_data[mouse_cycle++] = (int8_t)mouse_byte;
 
     if (mouse_cycle == 3) {
         mouse_cycle = 0;
@@ -109,15 +139,13 @@ void mouse_handler_main() {
                 draw_string(10, 550, "> SYSTEM", 0xFFFFFF);
                 draw_string(10, 580, "> REBOOT", 0xFFFFFF);
             } else {
-                draw_rect(0, 530, 200, 200, 0x1A2B3C); // Стереть меню
+                draw_rect(0, 530, 200, 200, 0x1A2B3C); 
             }
         }
         
-        // Клик по REBOOT внутри меню
-        if (left_clicked && menu_open && mouse_x < 200 && mouse_y > 570 && mouse_y < 600) {
-            draw_string(10, 680, "REBOOTING...", 0xFF0000);
-            for(volatile int i=0; i<5000000; i++);
-            outb(0x64, 0xFE); // Команда перезагрузки
+        // Клик по REBOOT
+        if (left_clicked && menu_open && mouse_x < 200 && mouse_y > 575 && mouse_y < 595) {
+            outb(0x64, 0xFE); 
         }
 
         update_mouse_cursor();
@@ -129,6 +157,7 @@ void mouse_handler_main() {
 
 void update_mouse_cursor() {
     redraw_interface_at(old_x, old_y);
+    // Рисуем курсор
     draw_rect(mouse_x, mouse_y, 2, 12, 0xFFFFFF);
     draw_rect(mouse_x, mouse_y, 12, 2, 0xFFFFFF);
     old_x = mouse_x;
