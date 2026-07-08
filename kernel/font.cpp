@@ -1,6 +1,8 @@
 #include "include/font.h"
 #include "include/vesa.h"
 
+extern "C" {
+
 static unsigned char get_font_line(char c, int line) {
     switch (c) {
         // Цифры
@@ -71,3 +73,13 @@ void draw_char(int x, int y, char c, uint32_t color) {
         }
     }
 }
+
+void draw_string(int x, int y, const char* str, uint32_t color) {
+    int cur_x = x;
+    for (int i = 0; str[i] != '\0'; i++) {
+        draw_char(cur_x, y, str[i], color);
+        cur_x += 8;
+    }
+}
+
+}// extern "C"
