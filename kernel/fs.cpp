@@ -28,11 +28,14 @@ void fs_str_copy(char* dest, const char* src) {
 
 void init_mouse_fs() {
     ata_read_sector(1, (uint16_t*)&sb);
-    if (sb.magic != MOUSE_FS_MAGIC) {
-        terminal_writestring("MouseCore: Formatting Disk...\n");
+    
+    // ИСПРАВЛЕНО: Проверяем не только магическое число, но и адекватность счетчика файлов
+    if (sb.magic != MOUSE_FS_MAGIC || sb.file_count > MAX_DISK_FILES) {
+        terminal_writestring("MouseCore: Formatting Disk (Invalid or Empty FS)...\n");
         sb.magic = MOUSE_FS_MAGIC;
         sb.file_count = 0;
         ata_write_sector(1, (uint16_t*)&sb);
+        
         for(int i = 0; i < MAX_DISK_FILES; i++) file_table[i].flags = 0;
         ata_write_sector(2, (uint16_t*)file_table);
     } else {
