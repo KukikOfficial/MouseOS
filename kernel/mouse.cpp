@@ -14,7 +14,7 @@ bool explorer_open = false;
 
 extern "C" {
 
-void draw_explorer(); // из explorer.cpp
+void draw_explorer(); 
 
 uint8_t get_rtc(int reg) { outb(0x70, reg); return inb(0x71); }
 int bcd_to_bin(uint8_t bcd) { return ((bcd >> 4) * 10) + (bcd & 0x0F); }
@@ -28,29 +28,57 @@ void draw_clock() {
     draw_string(960, 742, t, 0x00FF00);
 }
 
-void redraw_interface_at(int x, int y) {
-    draw_rect(x, y, 16, 16, 0x1A2B3C); // Стираем курсор
+// Функция для полной и чистой перерисовки всего интерфейса ОС
+void draw_all_ui() {
+    clear_screen(0x1A2B3C); 
 
-    // Окно консоли
+    // Основное окно консоли ядра
+    draw_rect(150, 100, 724, 500, 0xCCCCCC); 
+    draw_rect(150, 100, 724, 32, 0x0055AA);  
+    draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
+
+    // Если открыт проводник — рисуем его поверх
+    if (explorer_open) {
+        draw_explorer();
+    }
+
+    // Нижняя панель задач
+    draw_rect(0, 730, 1024, 38, 0x222222);
+    draw_string(10, 742, "[ START ]", 0xFFFFFF);
+    draw_clock();
+
+    // Если открыто меню старт — рисуем его элементы
+    if (menu_open) {
+        draw_rect(0, 530, 200, 200, 0x444444);
+        draw_string(10, 550, "> FILES", 0xFFFFFF);
+        draw_string(10, 580, "> REBOOT", 0xFFFFFF);
+    }
+}
+
+// Восстановление участков UI при движении мыши (оптимизация)
+void redraw_interface_at(int x, int y) {
+    draw_rect(x, y, 16, 16, 0x1A2B3C); // Стираем старый курсор цветом фона
+
+    // Проверяем пересечение с консолью
     if (x+16 > 150 && x < 874 && y+16 > 100 && y < 600) {
         draw_rect(150, 100, 724, 500, 0xCCCCCC);
         draw_rect(150, 100, 724, 32, 0x0055AA);
         draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
     }
 
-    // Окно проводника
+    // Проверяем пересечение с проводником
     if (explorer_open && x+16 > 300 && x < 720 && y+16 > 200 && y < 520) {
         draw_explorer();
     }
 
-    // Панель задач
+    // Проверяем пересечение с панелью задач
     if (y+16 > 730) {
         draw_rect(0, 730, 1024, 38, 0x222222);
         draw_string(10, 742, "[ START ]", 0xFFFFFF);
         draw_clock();
     }
 
-    // Меню
+    // Проверяем пересечение с меню ПУСК
     if (menu_open && x < 200 && y+16 > 530 && y < 730) {
         draw_rect(0, 530, 200, 200, 0x444444);
         draw_string(10, 550, "> FILES", 0xFFFFFF);
@@ -84,16 +112,16 @@ void mouse_handler_main() {
         if (mouse_y > 754) mouse_y = 754;
 
         if (left_clicked) {
-            // Клик по ПУСК
+            // Клик по кнопке ПУСК
             if (mouse_x < 100 && mouse_y > 730) {
                 menu_open = !menu_open;
-                clear_screen(0x1A2B3C); 
+                draw_all_ui(); 
             }
-            // Клик по FILES
+            // Клик по FILES внутри меню
             else if (menu_open && mouse_x < 200 && mouse_y > 540 && mouse_y < 570) {
                 explorer_open = !explorer_open;
                 menu_open = false;
-                clear_screen(0x1A2B3C);
+                draw_all_ui(); 
             }
             // Клик по REBOOT
             else if (menu_open && mouse_x < 200 && mouse_y > 575 && mouse_y < 605) {
@@ -102,7 +130,7 @@ void mouse_handler_main() {
             // Закрытие проводника (крестик)
             else if (explorer_open && mouse_x > 695 && mouse_x < 715 && mouse_y > 205 && mouse_y < 225) {
                 explorer_open = false;
-                clear_screen(0x1A2B3C);
+                draw_all_ui(); 
             }
         }
 
@@ -121,9 +149,10 @@ void init_mouse_driver() {
 
 void update_mouse_cursor() {
     redraw_interface_at(old_x, old_y);
+    // Рисуем указатель (перекрестие)
     draw_rect(mouse_x, mouse_y, 2, 12, 0xFFFFFF);
     draw_rect(mouse_x, mouse_y, 12, 2, 0xFFFFFF);
     old_x = mouse_x; old_y = mouse_y;
 }
 
-} // extern "C"
+}
