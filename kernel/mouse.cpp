@@ -7,12 +7,9 @@
 
 extern "C" {
 
-// Глобальные динамические координаты окон на рабочем столе
 int explorer_x = 300, explorer_y = 150;
 int tasks_x = 450, tasks_y = 200;
 int notepad_x = 350, notepad_y = 250; 
-
-// Состояние прокрутки Проводника
 int explorer_scroll = 0;
 
 int mouse_x = 512, mouse_y = 384;
@@ -23,7 +20,6 @@ int8_t mouse_data[3];
 bool left_clicked = false;
 bool last_left_state = false; 
 
-// Флаги перетаскивания окон
 bool drag_explorer = false;
 bool drag_tasks = false;
 bool drag_notepad = false; 
@@ -39,11 +35,10 @@ char current_editing_file[20] = "NONE";
 char notepad_buffer[256] = "";
 int notepad_ptr = 0;
 
-// ИСПРАВЛЕНО: Только объявления функций! Тела функций находятся исключительно в explorer.cpp
+// Прототипы функций, объявленные в других файлах
 void draw_explorer(); 
 void draw_task_manager(); 
 void draw_notepad(); 
-
 uint32_t get_file_count();
 extern DiskFileEntry file_table[MAX_DISK_FILES];
 
@@ -66,7 +61,6 @@ void draw_all_ui() {
     if (tasks_open) draw_task_manager(); 
     if (notepad_open) draw_notepad(); 
 
-    // Панель задач
     draw_rect(0, 730, 1024, 38, 0x222222);
     draw_string(10, 742, "[ START ]", 0xFFFFFF);
     draw_clock();
@@ -108,23 +102,16 @@ void mouse_handler_main() {
         bool click_pressed = (left_clicked && !last_left_state);
         last_left_state = left_clicked;
 
-        // --- DRAG & DROP ОКН ---
         if (left_clicked) {
             if (!drag_explorer && !drag_tasks && !drag_notepad) {
-                if (explorer_open && mouse_x >= explorer_x && mouse_x <= (explorer_x + 390) &&
-                    mouse_y >= explorer_y && mouse_y <= (explorer_y + 28)) {
-                    drag_explorer = true;
-                    drag_off_x = mouse_x - explorer_x; drag_off_y = mouse_y - explorer_y;
+                if (explorer_open && mouse_x >= explorer_x && mouse_x <= (explorer_x + 390) && mouse_y >= explorer_y && mouse_y <= (explorer_y + 28)) {
+                    drag_explorer = true; drag_off_x = mouse_x - explorer_x; drag_off_y = mouse_y - explorer_y;
                 }
-                else if (tasks_open && mouse_x >= tasks_x && mouse_x <= (tasks_x + 270) &&
-                         mouse_y >= tasks_y && mouse_y <= (tasks_y + 28)) {
-                    drag_tasks = true;
-                    drag_off_x = mouse_x - tasks_x; drag_off_y = mouse_y - tasks_y;
+                else if (tasks_open && mouse_x >= tasks_x && mouse_x <= (tasks_x + 270) && mouse_y >= tasks_y && mouse_y <= (tasks_y + 28)) {
+                    drag_tasks = true; drag_off_x = mouse_x - tasks_x; drag_off_y = mouse_y - tasks_y;
                 }
-                else if (notepad_open && mouse_x >= notepad_x && mouse_x <= (notepad_x + 370) &&
-                         mouse_y >= notepad_y && mouse_y <= (notepad_y + 28)) {
-                    drag_notepad = true;
-                    drag_off_x = mouse_x - notepad_x; drag_off_y = mouse_y - notepad_y;
+                else if (notepad_open && mouse_x >= notepad_x && mouse_x <= (notepad_x + 370) && mouse_y >= notepad_y && mouse_y <= (notepad_y + 28)) {
+                    drag_notepad = true; drag_off_x = mouse_x - notepad_x; drag_off_y = mouse_y - notepad_y;
                 }
             }
 
@@ -135,7 +122,6 @@ void mouse_handler_main() {
             drag_explorer = false; drag_tasks = false; drag_notepad = false;
         }
 
-        // --- КЛИКИ ПО ИНТЕРФЕЙСУ ---
         if (click_pressed) {
             if (mouse_x < 100 && mouse_y > 730) { menu_open = !menu_open; draw_all_ui(); }
             else if (menu_open && mouse_x < 200 && mouse_y > 500 && mouse_y < 535) {
@@ -150,7 +136,6 @@ void mouse_handler_main() {
             }
             else if (menu_open && mouse_x < 200 && mouse_y > 580 && mouse_y < 615) { outb(0x64, 0xFE); }
             
-            // Кнопки закрытия окон (Крестики)
             else if (explorer_open && mouse_x > (explorer_x + 395) && mouse_x < (explorer_x + 415) && mouse_y > (explorer_y + 5) && mouse_y < (explorer_y + 25)) {
                 explorer_open = false; terminate_process_by_name("EXPLORER"); draw_all_ui(); 
             }
@@ -161,7 +146,6 @@ void mouse_handler_main() {
                 notepad_open = false; terminate_process_by_name("NOTEPAD"); draw_all_ui();
             }
 
-            // Кнопка NEW FILE
             else if (explorer_open && mouse_x > (explorer_x + 15) && mouse_x < (explorer_x + 115) && mouse_y > (explorer_y + 285) && mouse_y < (explorer_y + 310)) {
                 uint32_t f_idx = get_file_count() + 1;
                 char f_name[12] = "FILE0.TXT";
@@ -170,18 +154,15 @@ void mouse_handler_main() {
                 draw_all_ui(); 
             }
 
-            // Кнопка Скроллбара ВВЕРХ [^]
             else if (explorer_open && mouse_x >= (explorer_x + 395) && mouse_x <= (explorer_x + 420) && mouse_y >= (explorer_y + 28) && mouse_y <= (explorer_y + 53)) {
                 if (explorer_scroll > 0) { explorer_scroll--; draw_all_ui(); }
             }
-            // Кнопка Скроллбара ВНИЗ [v]
             else if (explorer_open && mouse_x >= (explorer_x + 395) && mouse_x <= (explorer_x + 420) && mouse_y >= (explorer_y + 260) && mouse_y <= (explorer_y + 285)) {
                 uint32_t total_files = get_file_count();
                 int max_scroll = (total_files > 9) ? (total_files - 9) : 0;
                 if (explorer_scroll < max_scroll) { explorer_scroll++; draw_all_ui(); }
             }
 
-            // Клик по имени файла -> Открытие в Блокноте
             else if (explorer_open && mouse_x >= (explorer_x + 20) && mouse_x <= (explorer_x + 380) && mouse_y >= (explorer_y + 40) && mouse_y <= (explorer_y + 256)) {
                 int clicked_row = (mouse_y - (explorer_y + 40)) / 24;
                 int current_row = 0; int skipped = 0;
@@ -206,7 +187,6 @@ void mouse_handler_main() {
                 }
             }
 
-            // Кнопка SAVE внутри Блокнота
             else if (notepad_open && mouse_x >= (notepad_x + 15) && mouse_x <= (notepad_x + 95) && mouse_y >= (notepad_y + 215) && mouse_y <= (notepad_y + 239)) {
                 fs_write_file_data(current_editing_file, notepad_buffer); 
                 draw_all_ui();
