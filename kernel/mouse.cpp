@@ -30,18 +30,14 @@ void draw_clock() {
 
 // Рисует весь статический UI в фоновый буфер backbuffer
 void draw_all_ui() {
-    clear_screen(0x1A2B3C); // Очищаем буфер в памяти
+    clear_screen(0x1A2B3C); // Чистый красивый фон рабочего стола БЕЗ лишних окон!
 
-    // Окно консоли ядра
-    draw_rect(150, 100, 724, 500, 0xCCCCCC); 
-    draw_rect(150, 100, 724, 32, 0x0055AA);  
-    draw_string(160, 108, "MOUSE OS CORE", 0xFFFFFF);
-
+    // Если открыт проводник — рисуем его поверх
     if (explorer_open) {
         draw_explorer(); 
     }
 
-    // Панель задач
+    // Нижняя панель задач
     draw_rect(0, 730, 1024, 38, 0x222222);
     draw_string(10, 742, "[ START ]", 0xFFFFFF);
     draw_clock();
@@ -52,8 +48,30 @@ void draw_all_ui() {
         draw_string(10, 580, "> REBOOT", 0xFFFFFF);
     }
     
-    // Выводим все изменения из памяти на экран за один раз
     update_screen();
+}
+
+void redraw_interface_at(int x, int y) {
+    draw_rect(x, y, 16, 16, 0x1A2B3C); // Стираем старый курсор цветом фона рабочего стола
+
+    // Проверяем пересечение с проводником
+    if (explorer_open && x+16 > 300 && x < 720 && y+16 > 200 && y < 520) {
+        draw_explorer();
+    }
+
+    // Проверяем пересечение с панелью задач
+    if (y+16 > 730) {
+        draw_rect(0, 730, 1024, 38, 0x222222);
+        draw_string(10, 742, "[ START ]", 0xFFFFFF);
+        draw_clock();
+    }
+
+    // Проверяем пересечение с меню ПУСК
+    if (menu_open && x < 200 && y+16 > 530 && y < 730) {
+        draw_rect(0, 530, 200, 200, 0x444444);
+        draw_string(10, 550, "> FILES", 0xFFFFFF);
+        draw_string(10, 580, "> REBOOT", 0xFFFFFF);
+    }
 }
 
 void mouse_handler_main() {

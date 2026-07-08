@@ -46,6 +46,7 @@ static unsigned char get_font_line(char c, int line) {
         // Спецсимволы
         case ':': { unsigned char b[] = {0x00,0x10,0x00,0x00,0x00,0x10,0x00,0x00}; return b[line]; }
         case '.': { unsigned char b[] = {0x00,0x00,0x00,0x00,0x00,0x10,0x10,0x00}; return b[line]; }
+        case ',': { unsigned char b[] = {0x00,0x00,0x00,0x00,0x00,0x10,0x10,0x20}; return b[line]; } // ИСПРАВЛЕНО: Добавлена запятая
         case '>': { unsigned char b[] = {0x40,0x20,0x10,0x08,0x10,0x20,0x40,0x00}; return b[line]; }
         case '[': { unsigned char b[] = {0x1C,0x10,0x10,0x10,0x10,0x10,0x1C,0x00}; return b[line]; }
         case ']': { unsigned char b[] = {0x38,0x08,0x08,0x08,0x08,0x08,0x38,0x00}; return b[line]; }
@@ -56,6 +57,11 @@ static unsigned char get_font_line(char c, int line) {
 }
 
 void draw_char(int x, int y, char c, uint32_t color) {
+    // ИСПРАВЛЕНО: Если пришла маленькая буква, переводим её в большую (c -= 32)
+    if (c >= 'a' && c <= 'z') {
+        c -= 32;
+    }
+
     for (int i = 0; i < 8; i++) {
         unsigned char bits = get_font_line(c, i);
         for (int j = 0; j < 8; j++) {
@@ -63,13 +69,5 @@ void draw_char(int x, int y, char c, uint32_t color) {
                 put_pixel(x + j, y + i, color);
             }
         }
-    }
-}
-
-void draw_string(int x, int y, const char* str, uint32_t color) {
-    int cur_x = x;
-    for (int i = 0; str[i] != '\0'; i++) {
-        draw_char(cur_x, y, str[i], color);
-        cur_x += 8;
     }
 }

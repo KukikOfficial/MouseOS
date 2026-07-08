@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define MOUSE_FS_MAGIC 0x53554F4D 
+#define MOUSE_FS_MAGIC 0x53554F4E
 #define MAX_DISK_FILES 16         
 
 struct DiskFileEntry {
