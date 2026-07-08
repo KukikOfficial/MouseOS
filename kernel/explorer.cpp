@@ -3,22 +3,22 @@
 #include "include/font.h"
 #include "include/process.h"
 
+extern "C" {
+
+// Импортируем общие C-переменные из mouse.cpp
 extern int explorer_x, explorer_y;
 extern int tasks_x, tasks_y;
-extern int notepad_x, notepad_y; // Координаты блокнота
+extern int notepad_x, notepad_y; 
 extern int explorer_scroll;
 
 extern bool explorer_open; 
 extern bool tasks_open;
-extern bool notepad_open;        // Состояние окна блокнота
+extern bool notepad_open;        
 extern char current_editing_file[20];
 extern char notepad_buffer[256];
 
 extern DiskFileEntry file_table[MAX_DISK_FILES];
 extern Process process_table[MAX_PROCESSES];
-
-extern "C" {
-
 uint32_t get_file_count();
 
 void draw_explorer() {
@@ -33,16 +33,12 @@ void draw_explorer() {
     draw_rect(explorer_x + 395, explorer_y + 5, 20, 18, 0xAA0000);
     draw_string(explorer_x + 402, explorer_y + 8, "X", 0xFFFFFF);
 
-    // ИСПРАВЛЕНО: Кнопочный надежный скроллбар со стрелочками
-    draw_rect(explorer_x + 395, explorer_y + 28, 25, 25, 0x999999);  // Кнопка ВВЕРХ
+    // Стрелочный скроллбар
+    draw_rect(explorer_x + 395, explorer_y + 28, 25, 25, 0x999999);  // ВВЕРХ
     draw_string(explorer_x + 404, explorer_y + 34, "^", 0x000000);
-    
     draw_rect(explorer_x + 395, explorer_y + 53, 25, 207, 0xBBBBBB); // Трек
-    
-    // Индикатор положения скролла
-    draw_rect(explorer_x + 397, explorer_y + 55 + (explorer_scroll * 15), 21, 25, 0x777777);
-
-    draw_rect(explorer_x + 395, explorer_y + 260, 25, 25, 0x999999); // Кнопка ВНИЗ
+    draw_rect(explorer_x + 397, explorer_y + 55 + (explorer_scroll * 15), 21, 25, 0x777777); // Ползунок
+    draw_rect(explorer_x + 395, explorer_y + 260, 25, 25, 0x999999); // ВНИЗ
     draw_string(explorer_x + 404, explorer_y + 266, "V", 0x000000);
 
     // Кнопка создания файла
@@ -76,31 +72,28 @@ void draw_explorer() {
     }
 }
 
-// НОВЫЙ ГРАФИЧЕСКИЙ ПРИЛАТ: Текстовый редактор (Блокнот)
 void draw_notepad() {
     if (!notepad_open) return;
 
-    // Шапка и рамка окна
-    draw_rect(notepad_x, notepad_y, 400, 250, 0xF5F5F5); // Светло-серый фон блокнота
-    draw_rect(notepad_x, notepad_y, 400, 28, 0x0055AA);   // Синяя шапка
+    draw_rect(notepad_x, notepad_y, 400, 250, 0xF5F5F5); 
+    draw_rect(notepad_x, notepad_y, 400, 28, 0x0055AA);   
     draw_string(notepad_x + 10, notepad_y + 8, "EDIT:", 0xFFFFFF);
-    draw_string(notepad_x + 60, notepad_y + 8, current_editing_file, 0xFFFF00); // Жёлтое имя файла
+    draw_string(notepad_x + 60, notepad_y + 8, current_editing_file, 0xFFFF00); 
 
     // Крестик закрытия
     draw_rect(notepad_x + 375, notepad_y + 5, 20, 18, 0xAA0000);
     draw_string(notepad_x + 382, notepad_y + 8, "X", 0xFFFFFF);
 
-    // Рабочая текстовая зона (Белый лист бумаги)
+    // Текстовое поле
     draw_rect(notepad_x + 10, notepad_y + 38, 380, 170, 0xFFFFFF);
     
-    // Выводим текст, который сейчас напечатан в буфере
     if (notepad_buffer[0] == '\0') {
         draw_string(notepad_x + 15, notepad_y + 45, "TYPE TEXT HERE...", 0xCCCCCC);
     } else {
         draw_string(notepad_x + 15, notepad_y + 45, notepad_buffer, 0x000000);
     }
 
-    // Кнопка сохранения изменений на диск
+    // Кнопка SAVE
     draw_rect(notepad_x + 15, notepad_y + 215, 80, 24, 0x00AA55);
     draw_string(notepad_x + 35, notepad_y + 223, "SAVE", 0xFFFFFF);
 }
