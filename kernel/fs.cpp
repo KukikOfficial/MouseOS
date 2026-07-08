@@ -3,7 +3,6 @@
 #include "include/vga.h"
 
 SuperBlock sb;
-// Глобальный массив записей о файлах
 DiskFileEntry file_table[MAX_DISK_FILES]; 
 
 extern "C" {
@@ -28,14 +27,10 @@ void fs_str_copy(char* dest, const char* src) {
 
 void init_mouse_fs() {
     ata_read_sector(1, (uint16_t*)&sb);
-    
-    // ИСПРАВЛЕНО: Проверяем не только магическое число, но и адекватность счетчика файлов
     if (sb.magic != MOUSE_FS_MAGIC || sb.file_count > MAX_DISK_FILES) {
-        terminal_writestring("MouseCore: Formatting Disk (Invalid or Empty FS)...\n");
         sb.magic = MOUSE_FS_MAGIC;
         sb.file_count = 0;
         ata_write_sector(1, (uint16_t*)&sb);
-        
         for(int i = 0; i < MAX_DISK_FILES; i++) file_table[i].flags = 0;
         ata_write_sector(2, (uint16_t*)file_table);
     } else {
@@ -66,15 +61,39 @@ void write_to_disk(const char* name, const char* content) {
     ata_write_sector(2, (uint16_t*)file_table);
 }
 
-void read_from_disk(const char* name) {
+// НОВАЯ ФУНКЦИЯ: Чтение содержимого файла в буфер Блокнота
+void fs_read_file_data(const char* name, char* out_content) {
     for (uint32_t i = 0; i < sb.file_count; i++) {
         if (file_table[i].flags == 1 && fs_str_match(file_table[i].name, name)) {
             uint16_t buffer[256];
             ata_read_sector(file_table[i].start_lba, buffer);
-            terminal_writestring((char*)buffer);
+            char* ptr = (char*)buffer;
+            for(int j = 0; j < 512; j++) out_content[j] = ptr[j];
             return;
         }
     }
+    out_content[0] = '\0';
+}
+
+// НОВАЯ ФУНКЦИЯ: Перезапись содержимого файла (Редактирование)
+void fs_write_file_data(const char* name, const char* content) {
+    for (uint32_t i = 0; i < sb.file_count; i++) {
+        if (file_table[i].flags == 1 && fs_str_match(file_table[i].name, name)) {
+            uint16_t buffer[256];
+            for(int j = 0; j < 256; j++) buffer[j] = 0;
+            char* ptr = (char*)buffer;
+            for(int j = 0; content[j] != '\0' && j < 510; j++) ptr[j] = content[j];
+            
+            ata_write_sector(file_table[i].start_lba, buffer);
+            return;
+        }
+    }
+}
+
+void read_from_disk(const char* name) {
+    char temp[512];
+    fs_read_file_data(name, temp);
+    terminal_writestring(temp);
 }
 
 void list_files() {

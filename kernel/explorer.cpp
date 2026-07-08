@@ -5,10 +5,15 @@
 
 extern int explorer_x, explorer_y;
 extern int tasks_x, tasks_y;
+extern int notepad_x, notepad_y; // Координаты блокнота
 extern int explorer_scroll;
 
 extern bool explorer_open; 
 extern bool tasks_open;
+extern bool notepad_open;        // Состояние окна блокнота
+extern char current_editing_file[20];
+extern char notepad_buffer[256];
+
 extern DiskFileEntry file_table[MAX_DISK_FILES];
 extern Process process_table[MAX_PROCESSES];
 
@@ -19,36 +24,28 @@ uint32_t get_file_count();
 void draw_explorer() {
     if (!explorer_open) return;
 
-    // 1. Основное окно проводника
+    // Окно проводника
     draw_rect(explorer_x, explorer_y, 420, 320, 0xDDDDDD); 
-    draw_rect(explorer_x, explorer_y, 420, 28, 0x444444);  // Заголовок (Зона drag-and-drop)
+    draw_rect(explorer_x, explorer_y, 420, 28, 0x444444);  
     draw_string(explorer_x + 10, explorer_y + 8, "FILE EXPLORER", 0xFFFFFF);
     
-    // Кнопка закрытия X
+    // Крестик закрытия
     draw_rect(explorer_x + 395, explorer_y + 5, 20, 18, 0xAA0000);
     draw_string(explorer_x + 402, explorer_y + 8, "X", 0xFFFFFF);
 
-    // 2. ИСПРАВЛЕНО: Полоса прокрутки (Scrollbar) теперь имеет ширину 25px и прижата к правому краю окна
-    int sb_x = explorer_x + 395;
-    int sb_y = explorer_y + 28; // Начинается сразу под заголовком
-    int sb_w = 25;
-    int sb_h = 292;             // Идет до самого низа окна (28 + 292 = 320)
-    draw_rect(sb_x, sb_y, sb_w, sb_h, 0xBBBBBB); // Трэк скроллбара
+    // ИСПРАВЛЕНО: Кнопочный надежный скроллбар со стрелочками
+    draw_rect(explorer_x + 395, explorer_y + 28, 25, 25, 0x999999);  // Кнопка ВВЕРХ
+    draw_string(explorer_x + 404, explorer_y + 34, "^", 0x000000);
+    
+    draw_rect(explorer_x + 395, explorer_y + 53, 25, 207, 0xBBBBBB); // Трек
+    
+    // Индикатор положения скролла
+    draw_rect(explorer_x + 397, explorer_y + 55 + (explorer_scroll * 15), 21, 25, 0x777777);
 
-    // Динамический расчет максимума прокрутки
-    uint32_t total_files = get_file_count();
-    int max_scroll = (total_files > 9) ? (total_files - 9) : 0;
+    draw_rect(explorer_x + 395, explorer_y + 260, 25, 25, 0x999999); // Кнопка ВНИЗ
+    draw_string(explorer_x + 404, explorer_y + 266, "V", 0x000000);
 
-    // Отрисовка ползунка (индикатора скролла)
-    int slider_h = 40;
-    int slider_y = sb_y + 5;
-    if (max_scroll > 0) {
-        // Положение ползунка динамически распределяется по высоте полосы
-        slider_y = sb_y + 5 + (explorer_scroll * (sb_h - slider_h - 10) / max_scroll);
-    }
-    draw_rect(sb_x + 2, slider_y, sb_w - 4, slider_h, 0x777777);
-
-    // 3. Фиксированная кнопка создания файла
+    // Кнопка создания файла
     draw_rect(explorer_x + 15, explorer_y + 285, 100, 24, 0x00AA55);
     draw_string(explorer_x + 25, explorer_y + 293, "NEW FILE", 0xFFFFFF);
 
@@ -77,6 +74,35 @@ void draw_explorer() {
             }
         }
     }
+}
+
+// НОВЫЙ ГРАФИЧЕСКИЙ ПРИЛАТ: Текстовый редактор (Блокнот)
+void draw_notepad() {
+    if (!notepad_open) return;
+
+    // Шапка и рамка окна
+    draw_rect(notepad_x, notepad_y, 400, 250, 0xF5F5F5); // Светло-серый фон блокнота
+    draw_rect(notepad_x, notepad_y, 400, 28, 0x0055AA);   // Синяя шапка
+    draw_string(notepad_x + 10, notepad_y + 8, "EDIT:", 0xFFFFFF);
+    draw_string(notepad_x + 60, notepad_y + 8, current_editing_file, 0xFFFF00); // Жёлтое имя файла
+
+    // Крестик закрытия
+    draw_rect(notepad_x + 375, notepad_y + 5, 20, 18, 0xAA0000);
+    draw_string(notepad_x + 382, notepad_y + 8, "X", 0xFFFFFF);
+
+    // Рабочая текстовая зона (Белый лист бумаги)
+    draw_rect(notepad_x + 10, notepad_y + 38, 380, 170, 0xFFFFFF);
+    
+    // Выводим текст, который сейчас напечатан в буфере
+    if (notepad_buffer[0] == '\0') {
+        draw_string(notepad_x + 15, notepad_y + 45, "TYPE TEXT HERE...", 0xCCCCCC);
+    } else {
+        draw_string(notepad_x + 15, notepad_y + 45, notepad_buffer, 0x000000);
+    }
+
+    // Кнопка сохранения изменений на диск
+    draw_rect(notepad_x + 15, notepad_y + 215, 80, 24, 0x00AA55);
+    draw_string(notepad_x + 35, notepad_y + 223, "SAVE", 0xFFFFFF);
 }
 
 void draw_task_manager() {
