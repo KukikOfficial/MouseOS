@@ -3,7 +3,6 @@
 #include "include/font.h"
 #include "include/process.h"
 
-// Ссылаемся на динамические координаты окон и состояние скролла из mouse.cpp
 extern int explorer_x, explorer_y;
 extern int tasks_x, tasks_y;
 extern int explorer_scroll;
@@ -20,29 +19,36 @@ uint32_t get_file_count();
 void draw_explorer() {
     if (!explorer_open) return;
 
-    // 1. Рисуем основное окно проводника по динамическим координатам
-    draw_rect(explorer_x, explorer_y, 420, 320, 0xDDDDDD); // Основной фон
-    draw_rect(explorer_x, explorer_y, 420, 28, 0x444444);  // Заголовок (Зона перетаскивания)
+    // 1. Основное окно проводника
+    draw_rect(explorer_x, explorer_y, 420, 320, 0xDDDDDD); 
+    draw_rect(explorer_x, explorer_y, 420, 28, 0x444444);  // Заголовок (Зона drag-and-drop)
     draw_string(explorer_x + 10, explorer_y + 8, "FILE EXPLORER", 0xFFFFFF);
     
-    // Кнопка закрытия (крестик) привязана к правому верхнему углу окна
+    // Кнопка закрытия X
     draw_rect(explorer_x + 395, explorer_y + 5, 20, 18, 0xAA0000);
     draw_string(explorer_x + 402, explorer_y + 8, "X", 0xFFFFFF);
 
-    // 2. Отрисовка полосы прокрутки (Scrollbar / Slider) справа
+    // 2. ИСПРАВЛЕНО: Полоса прокрутки (Scrollbar) теперь имеет ширину 25px и прижата к правому краю окна
     int sb_x = explorer_x + 395;
-    int sb_y = explorer_y + 35;
-    int sb_w = 15;
-    int sb_h = 240;
-    draw_rect(sb_x, sb_y, sb_w, sb_h, 0xBBBBBB); // Трек слайдера
+    int sb_y = explorer_y + 28; // Начинается сразу под заголовком
+    int sb_w = 25;
+    int sb_h = 292;             // Идет до самого низа окна (28 + 292 = 320)
+    draw_rect(sb_x, sb_y, sb_w, sb_h, 0xBBBBBB); // Трэк скроллбара
 
-    // Визуальный ползунок, положение которого зависит от explorer_scroll
-    // Всего файлов максимум 16, на экране помещается 9. Макс скролл = 7 уровней.
-    int slider_block_h = 40;
-    int slider_block_y = sb_y + (explorer_scroll * 25); 
-    draw_rect(sb_x + 1, slider_block_y, sb_w - 2, slider_block_h, 0x777777); // Сам ползунок
+    // Динамический расчет максимума прокрутки
+    uint32_t total_files = get_file_count();
+    int max_scroll = (total_files > 9) ? (total_files - 9) : 0;
 
-    // 3. Фиксированная кнопка создания файла внизу окна (больше не перекрывается файлами!)
+    // Отрисовка ползунка (индикатора скролла)
+    int slider_h = 40;
+    int slider_y = sb_y + 5;
+    if (max_scroll > 0) {
+        // Положение ползунка динамически распределяется по высоте полосы
+        slider_y = sb_y + 5 + (explorer_scroll * (sb_h - slider_h - 10) / max_scroll);
+    }
+    draw_rect(sb_x + 2, slider_y, sb_w - 4, slider_h, 0x777777);
+
+    // 3. Фиксированная кнопка создания файла
     draw_rect(explorer_x + 15, explorer_y + 285, 100, 24, 0x00AA55);
     draw_string(explorer_x + 25, explorer_y + 293, "NEW FILE", 0xFFFFFF);
 
@@ -57,13 +63,11 @@ void draw_explorer() {
 
         for (int i = 0; i < MAX_DISK_FILES; i++) {
             if (file_table[i].flags == 1) {
-                // Пропускаем файлы, которые остались сверху при прокрутке
                 if (skipped_files < explorer_scroll) {
                     skipped_files++;
                     continue;
                 }
 
-                // Выводим строго не больше 9 файлов в область видимости окна
                 if (visible_count < 9) {
                     draw_string(explorer_x + 20, cur_y, "[FILE] ", 0x0000FF);
                     draw_string(explorer_x + 80, cur_y, file_table[i].name, 0x000000);
@@ -78,12 +82,10 @@ void draw_explorer() {
 void draw_task_manager() {
     if (!tasks_open) return;
 
-    // Рисуем Диспетчер задач по динамическим координатам
     draw_rect(tasks_x, tasks_y, 300, 250, 0xEEEEEE); 
-    draw_rect(tasks_x, tasks_y, 300, 28, 0x555555);  // Заголовок (Зона перетаскивания)
+    draw_rect(tasks_x, tasks_y, 300, 28, 0x555555); 
     draw_string(tasks_x + 10, tasks_y + 8, "TASK MANAGER", 0xFFFFFF);
 
-    // Кнопка закрытия
     draw_rect(tasks_x + 275, tasks_y + 5, 20, 18, 0xAA0000);
     draw_string(tasks_x + 282, tasks_y + 8, "X", 0xFFFFFF);
 

@@ -5,11 +5,8 @@
 #include "include/fs.h"
 #include "include/process.h"
 
-// Глобальные динамические координаты окон на рабочем столе
 int explorer_x = 300, explorer_y = 200;
 int tasks_x = 450, tasks_y = 250;
-
-// Состояние прокрутки Проводника (сколько файлов скрыто сверху)
 int explorer_scroll = 0;
 
 int mouse_x = 512, mouse_y = 384;
@@ -18,9 +15,8 @@ uint8_t mouse_cycle = 0;
 int8_t mouse_data[3]; 
 
 bool left_clicked = false;
-static bool last_left_state = false; // Для отслеживания момента нажатия кнопки
+static bool last_left_state = false; 
 
-// Флаги перетаскивания окон мышью
 bool drag_explorer = false;
 bool drag_tasks = false;
 int drag_off_x = 0;
@@ -54,7 +50,6 @@ void draw_all_ui() {
     if (explorer_open) draw_explorer(); 
     if (tasks_open) draw_task_manager(); 
 
-    // Панель задач
     draw_rect(0, 730, 1024, 38, 0x222222);
     draw_string(10, 742, "[ START ]", 0xFFFFFF);
     draw_clock();
@@ -93,22 +88,20 @@ void mouse_handler_main() {
         if (mouse_x > 1010) mouse_x = 1010; 
         if (mouse_y > 754) mouse_y = 754;
 
-        // Вычисляем, был ли совершен ОДИНОЧНЫЙ клик (кнопка нажата именно в этот микромомент)
         bool click_pressed = (left_clicked && !last_left_state);
         last_left_state = left_clicked;
 
         // --- ЛОГИКА ПЕРЕТАСКИВАНИЯ ОКН (DRAG & DROP) ---
         if (left_clicked) {
-            // Если мы еще ничего не тащим, проверяем, попал ли курсор на заголовки окон
             if (!drag_explorer && !drag_tasks) {
-                // Проверяем заголовок Проводника (без учета зоны кнопки закрытия X)
+                // Тащим Проводник за заголовок (не включая крестик)
                 if (explorer_open && mouse_x >= explorer_x && mouse_x <= (explorer_x + 390) &&
                     mouse_y >= explorer_y && mouse_y <= (explorer_y + 28)) {
                     drag_explorer = true;
                     drag_off_x = mouse_x - explorer_x;
                     drag_off_y = mouse_y - explorer_y;
                 }
-                // Проверяем заголовок Диспетчера задач
+                // Тащим Диспетчер задач
                 else if (tasks_open && mouse_x >= tasks_x && mouse_x <= (tasks_x + 270) &&
                          mouse_y >= tasks_y && mouse_y <= (tasks_y + 28)) {
                     drag_tasks = true;
@@ -117,7 +110,6 @@ void mouse_handler_main() {
                 }
             }
 
-            // Если захват окна активен, обновляем координаты вслед за курсором
             if (drag_explorer) {
                 explorer_x = mouse_x - drag_off_x;
                 explorer_y = mouse_y - drag_off_y;
@@ -128,19 +120,16 @@ void mouse_handler_main() {
                 draw_all_ui();
             }
         } else {
-            // Как только отпустили левую кнопку мыши — сбрасываем состояние перетаскивания
             drag_explorer = false;
             drag_tasks = false;
         }
 
-        // --- ЛОГИКА ОБРАБОТКИ ОДИНОЧНЫХ КЛИКОВ ПО КНОПКАМ ---
+        // --- ЛОГИКА КЛИКОВ ПО КНОПКАМ ---
         if (click_pressed) {
-            // Клик по кнопке ПУСК
             if (mouse_x < 100 && mouse_y > 730) {
                 menu_open = !menu_open;
                 draw_all_ui(); 
             }
-            // Клик по FILES в меню
             else if (menu_open && mouse_x < 200 && mouse_y > 500 && mouse_y < 535) {
                 explorer_open = !explorer_open;
                 menu_open = false;
@@ -148,7 +137,6 @@ void mouse_handler_main() {
                 else terminate_process_by_name("EXPLORER");
                 draw_all_ui(); 
             }
-            // Клик по TASKS в меню
             else if (menu_open && mouse_x < 200 && mouse_y > 540 && mouse_y < 575) {
                 tasks_open = !tasks_open;
                 menu_open = false;
@@ -156,25 +144,24 @@ void mouse_handler_main() {
                 else terminate_process_by_name("TASK_MGR");
                 draw_all_ui();
             }
-            // Клик по REBOOT
             else if (menu_open && mouse_x < 200 && mouse_y > 580 && mouse_y < 615) {
                 outb(0x64, 0xFE);
             }
-            // Крестик закрытия Проводника
+            // Крестик Проводника
             else if (explorer_open && mouse_x > (explorer_x + 395) && mouse_x < (explorer_x + 415) && 
                      mouse_y > (explorer_y + 5) && mouse_y < (explorer_y + 25)) {
                 explorer_open = false;
                 terminate_process_by_name("EXPLORER");
                 draw_all_ui(); 
             }
-            // Крестик закрытия Диспетчера задач
+            // Крестик Диспетчера задач
             else if (tasks_open && mouse_x > (tasks_x + 275) && mouse_x < (tasks_x + 295) && 
                      mouse_y > (tasks_y + 5) && mouse_y < (tasks_y + 25)) {
                 tasks_open = false;
                 terminate_process_by_name("TASK_MGR");
                 draw_all_ui();
             }
-            // Клик по фиксированной кнопке "NEW FILE"
+            // Кнопка NEW FILE
             else if (explorer_open && mouse_x > (explorer_x + 15) && mouse_x < (explorer_x + 115) && 
                      mouse_y > (explorer_y + 285) && mouse_y < (explorer_y + 310)) {
                 uint32_t f_idx = get_file_count() + 1;
@@ -184,20 +171,23 @@ void mouse_handler_main() {
                 write_to_disk(f_name, "CREATED VIA GRAPHICAL UI");
                 draw_all_ui(); 
             }
-            // --- НОВАЯ ЛОГИКА: Слайдер / Скроллинг в Проводнике ---
-            else if (explorer_open && mouse_x > (explorer_x + 395) && mouse_x < (explorer_x + 410) && 
-                     mouse_y > (explorer_y + 35) && mouse_y < (explorer_y + 275)) {
+            // --- ИСПРАВЛЕНО: Широкая и надежная зона клика скроллбара ---
+            else if (explorer_open && mouse_x >= (explorer_x + 395) && mouse_x <= (explorer_x + 420) && 
+                     mouse_y >= (explorer_y + 28) && mouse_y <= (explorer_y + 320)) {
                 
-                // Нажимаем на верхнюю половину трека слайдера -> скролл вверх
-                if (mouse_y < (explorer_y + 155)) {
-                    if (explorer_scroll > 0) explorer_scroll--;
-                } 
-                // Нажимаем на нижнюю половину трека слайдера -> скролл вниз
-                else {
-                    // Максимальное смещение = 7 (так как файлов 16, а влазит 9: 16 - 9 = 7)
-                    if (explorer_scroll < 7) explorer_scroll++;
+                uint32_t total_files = get_file_count();
+                int max_scroll = (total_files > 9) ? (total_files - 9) : 0;
+
+                if (max_scroll > 0) {
+                    // Клик в верхнюю половину полосы — крутим вверх, в нижнюю — вниз
+                    if (mouse_y < (explorer_y + 174)) { // Средняя точка: 28 + (292 / 2) = 174
+                        if (explorer_scroll > 0) explorer_scroll--;
+                    } 
+                    else {
+                        if (explorer_scroll < max_scroll) explorer_scroll++;
+                    }
+                    draw_all_ui();
                 }
-                draw_all_ui();
             }
         }
 
