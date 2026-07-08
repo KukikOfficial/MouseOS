@@ -3,6 +3,7 @@
 #include "include/vesa.h"
 #include "include/font.h"
 #include "include/fs.h"
+#include "include/process.h" // Подключаем процессы
 
 int mouse_x = 512, mouse_y = 384;
 int old_x = 512, old_y = 384;
@@ -11,10 +12,13 @@ int8_t mouse_data[3];
 bool left_clicked = false;
 bool menu_open = false;
 bool explorer_open = false;
+bool tasks_open = false; // Состояние окна диспетчера задач
 
 extern "C" {
 
 void draw_explorer(); 
+void draw_task_manager(); // Из explorer.cpp
+uint32_t get_file_count();
 
 uint8_t get_rtc(int reg) { outb(0x70, reg); return inb(0x71); }
 int bcd_to_bin(uint8_t bcd) { return ((bcd >> 4) * 10) + (bcd & 0x0F); }
@@ -28,49 +32,45 @@ void draw_clock() {
     draw_string(960, 742, t, 0x00FF00);
 }
 
-// Рисует весь статический UI в фоновый буфер backbuffer
 void draw_all_ui() {
-    clear_screen(0x1A2B3C); // Чистый красивый фон рабочего стола БЕЗ лишних окон!
+    clear_screen(0x1A2B3C); // ИСПРАВЛЕНО: Теперь тут чистый красивый рабочий стол без багнутых окон!
 
-    // Если открыт проводник — рисуем его поверх
-    if (explorer_open) {
-        draw_explorer(); 
-    }
+    if (explorer_open) draw_explorer(); 
+    if (tasks_open) draw_task_manager(); // Рисуем диспетчер задач, если он запущен
 
-    // Нижняя панель задач
+    // Панель задач
     draw_rect(0, 730, 1024, 38, 0x222222);
     draw_string(10, 742, "[ START ]", 0xFFFFFF);
     draw_clock();
 
+    // Увеличенное меню ПУСК под 3 элемента
     if (menu_open) {
-        draw_rect(0, 530, 200, 200, 0x444444);
-        draw_string(10, 550, "> FILES", 0xFFFFFF);
-        draw_string(10, 580, "> REBOOT", 0xFFFFFF);
+        draw_rect(0, 490, 200, 240, 0x444444);
+        draw_string(10, 510, "> FILES", 0xFFFFFF);
+        draw_string(10, 550, "> TASKS", 0xFFFFFF); // Новый пункт меню
+        draw_string(10, 590, "> REBOOT", 0xFFFFFF);
     }
     
     update_screen();
 }
 
 void redraw_interface_at(int x, int y) {
-    draw_rect(x, y, 16, 16, 0x1A2B3C); // Стираем старый курсор цветом фона рабочего стола
+    draw_rect(x, y, 16, 16, 0x1A2B3C); 
 
-    // Проверяем пересечение с проводником
-    if (explorer_open && x+16 > 300 && x < 720 && y+16 > 200 && y < 520) {
-        draw_explorer();
-    }
+    if (explorer_open && x+16 > 300 && x < 720 && y+16 > 200 && y < 520) draw_explorer();
+    if (tasks_open && x+16 > 450 && x < 750 && y+16 > 250 && y < 500) draw_task_manager();
 
-    // Проверяем пересечение с панелью задач
     if (y+16 > 730) {
         draw_rect(0, 730, 1024, 38, 0x222222);
         draw_string(10, 742, "[ START ]", 0xFFFFFF);
         draw_clock();
     }
 
-    // Проверяем пересечение с меню ПУСК
-    if (menu_open && x < 200 && y+16 > 530 && y < 730) {
-        draw_rect(0, 530, 200, 200, 0x444444);
-        draw_string(10, 550, "> FILES", 0xFFFFFF);
-        draw_string(10, 580, "> REBOOT", 0xFFFFFF);
+    if (menu_open && x < 200 && y+16 > 490 && y < 730) {
+        draw_rect(0, 490, 200, 240, 0x444444);
+        draw_string(10, 510, "> FILES", 0xFFFFFF);
+        draw_string(10, 550, "> TASKS", 0xFFFFFF);
+        draw_string(10, 590, "> REBOOT", 0xFFFFFF);
     }
 }
 
@@ -100,21 +100,51 @@ void mouse_handler_main() {
         if (mouse_y > 754) mouse_y = 754;
 
         if (left_clicked) {
+            // Клик по ПУСК
             if (mouse_x < 100 && mouse_y > 730) {
                 menu_open = !menu_open;
-                draw_all_ui(); // Полное обновление статического кадра
+                draw_all_ui(); 
             }
-            else if (menu_open && mouse_x < 200 && mouse_y > 540 && mouse_y < 570) {
+            // Клик по FILES
+            else if (menu_open && mouse_x < 200 && mouse_y > 500 && mouse_y < 535) {
                 explorer_open = !explorer_open;
                 menu_open = false;
+                if (explorer_open) create_process("EXPLORER"); // Регистрируем процесс
+                else terminate_process_by_name("EXPLORER");
                 draw_all_ui(); 
             }
-            else if (menu_open && mouse_x < 200 && mouse_y > 575 && mouse_y < 605) {
+            // Клик по TASKS
+            else if (menu_open && mouse_x < 200 && mouse_y > 540 && mouse_y < 575) {
+                tasks_open = !tasks_open;
+                menu_open = false;
+                if (tasks_open) create_process("TASK_MGR");
+                else terminate_process_by_name("TASK_MGR");
+                draw_all_ui();
+            }
+            // Клик по REBOOT
+            else if (menu_open && mouse_x < 200 && mouse_y > 580 && mouse_y < 615) {
                 outb(0x64, 0xFE);
             }
+            // Крестик закрытия Проводника
             else if (explorer_open && mouse_x > 695 && mouse_x < 715 && mouse_y > 205 && mouse_y < 225) {
                 explorer_open = false;
+                terminate_process_by_name("EXPLORER"); // Завершаем процесс
                 draw_all_ui(); 
+            }
+            // Крестик закрытия Диспетчера задач
+            else if (tasks_open && mouse_x > 725 && mouse_x < 745 && mouse_y > 255 && mouse_y < 275) {
+                tasks_open = false;
+                terminate_process_by_name("TASK_MGR");
+                draw_all_ui();
+            }
+            // ИСПРАВЛЕНО: Клик по кнопке "NEW FILE" внутри проводника
+            else if (explorer_open && mouse_x > 315 && mouse_x < 415 && mouse_y > 485 && mouse_y < 510) {
+                uint32_t f_idx = get_file_count() + 1;
+                char f_name[12] = "FILE0.TXT";
+                f_name[4] = '0' + (f_idx % 10); // Динамически создаем имя FILE1.TXT, FILE2.TXT
+                
+                write_to_disk(f_name, "CREATED VIA GRAPHICAL UI");
+                draw_all_ui(); // Мгновенно обновляем интерфейс, чтобы файл появился в списке!
             }
         }
 
@@ -131,15 +161,10 @@ void init_mouse_driver() {
     outb(0x64, 0xD4); outb(0x60, 0xF4); 
 }
 
-// ИСПРАВЛЕНО: Ультра-быстрое обновление позиции курсора БЕЗ мерцания экрана
 void update_mouse_cursor() {
-    // 1. Копируем чистый UI из памяти на экран (автоматически затирает мышь на старом месте)
     update_screen();
-    
-    // 2. Рисуем новый курсор мыши НАПРЯМУЮ на экран поверх картинки, не загрязняя фоновый буфер
     draw_rect_front(mouse_x, mouse_y, 2, 12, 0xFFFFFF);
     draw_rect_front(mouse_x, mouse_y, 12, 2, 0xFFFFFF);
-    
     old_x = mouse_x; old_y = mouse_y;
 }
 

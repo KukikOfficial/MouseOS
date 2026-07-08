@@ -1,13 +1,18 @@
 #include "include/fs.h"
 #include "include/vesa.h"
 #include "include/font.h"
+#include "include/process.h"
 
-// Ссылаемся на внешние данные
 extern bool explorer_open; 
+extern bool tasks_open; // Будет объявлена в mouse.cpp
 extern DiskFileEntry file_table[MAX_DISK_FILES];
-extern "C" uint32_t get_file_count();
+extern Process process_table[MAX_PROCESSES];
 
-extern "C" void draw_explorer() {
+extern "C" {
+
+uint32_t get_file_count();
+
+void draw_explorer() {
     if (!explorer_open) return;
 
     // Рисуем окно проводника
@@ -18,6 +23,10 @@ extern "C" void draw_explorer() {
     // Кнопка закрытия (крестик)
     draw_rect(695, 205, 20, 18, 0xAA0000);
     draw_string(702, 208, "X", 0xFFFFFF);
+
+    // ИСПРАВЛЕНО: Кнопка создания файла через UI (Зелёная)
+    draw_rect(315, 485, 100, 24, 0x00AA55);
+    draw_string(325, 493, "NEW FILE", 0xFFFFFF);
 
     uint32_t count = get_file_count();
     int cur_y = 240;
@@ -34,3 +43,31 @@ extern "C" void draw_explorer() {
         }
     }
 }
+
+// Новый графический компонент ОС: Диспетчер Задач
+void draw_task_manager() {
+    if (!tasks_open) return;
+
+    draw_rect(450, 250, 300, 250, 0xEEEEEE); // Основной фон
+    draw_rect(450, 250, 300, 28, 0x555555);  // Панель заголовка
+    draw_string(460, 258, "TASK MANAGER", 0xFFFFFF);
+
+    // Кнопка закрытия (крестик)
+    draw_rect(725, 255, 20, 18, 0xAA0000);
+    draw_string(732, 258, "X", 0xFFFFFF);
+
+    int cur_y = 290;
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        if (process_table[i].state != PROCESS_STOPPED) {
+            // Формируем вывод "PID: X" ручным способом
+            char pid_str[8] = "PID: 0 ";
+            pid_str[5] = '0' + (process_table[i].pid % 10);
+
+            draw_string(470, cur_y, pid_str, 0x0000FF);
+            draw_string(530, cur_y, process_table[i].name, 0x000000);
+            cur_y += 22;
+        }
+    }
+}
+
+} // extern "C"
