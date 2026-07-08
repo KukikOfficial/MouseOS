@@ -4,24 +4,20 @@
 #include "include/fs.h"
 #include "include/ata.h"
 
-// Глобальные переменные текстовой консоли
 bool shift_held = false;
 char command_buffer[128];
 int cmd_ptr = 0;
 
-// Карты символов клавиатуры
 unsigned char kbd_map[] = { 0, 27, '1','2','3','4','5','6','7','8','9','0','-','=','\b','\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',0,'a','s','d','f','g','h','j','k','l',';','\'','`',0,'\\','z','x','c','v','b','n','m',',','.','/',0,'*',0,' ' };
 unsigned char kbd_map_shift[] = { 0, 27, '!','@','#','$','%','^','&','*','(',')','_','+','\b','\t','Q','W','E','R','T','Y','U','I','O','P','{','}','\n',0,'A','S','D','F','G','H','J','K','L',':','\"','~',0,'|','Z','X','C','V','B','N','M','<','>','?',0,'*',0,' ' };
 
 extern "C" {
 
-// Импортируем графику и состояния Блокнота из mouse.cpp с использованием C-линковки
 extern bool notepad_open;
 extern char notepad_buffer[256];
 extern int notepad_ptr;
 void draw_all_ui();
 
-// Внутренние утилиты для строк командной строки
 bool kbd_str_compare(const char* s1, const char* s2) {
     int i = 0;
     while(s1[i] && s2[i]) { if(s1[i] != s2[i]) return false; i++; }
@@ -80,7 +76,6 @@ void execute_command() {
     cmd_ptr = 0;
 }
 
-// ИСПРАВЛЕНО: Главный обработчик прерывания клавиатуры (теперь жестко привязан к extern "C")
 void keyboard_handler_main() {
     uint8_t scancode = inb(0x60);
 

@@ -1,118 +1,121 @@
-#include "include/keyboard.h"
-#include "include/vga.h"
-#include "include/io.h"
 #include "include/fs.h"
-#include "include/ata.h"
-
-// Глобальные переменные текстовой консоли
-bool shift_held = false;
-char command_buffer[128];
-int cmd_ptr = 0;
-
-// Карты символов клавиатуры
-unsigned char kbd_map[] = { 0, 27, '1','2','3','4','5','6','7','8','9','0','-','=','\b','\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',0,'a','s','d','f','g','h','j','k','l',';','\'','`',0,'\\','z','x','c','v','b','n','m',',','.','/',0,'*',0,' ' };
-unsigned char kbd_map_shift[] = { 0, 27, '!','@','#','$','%','^','&','*','(',')','_','+','\b','\t','Q','W','E','R','T','Y','U','I','O','P','{','}','\n',0,'A','S','D','F','G','H','J','K','L',':','\"','~',0,'|','Z','X','C','V','B','N','M','<','>','?',0,'*',0,' ' };
+#include "include/vesa.h"
+#include "include/font.h"
+#include "include/process.h"
 
 extern "C" {
 
-// Импортируем графику и состояния Блокнота из mouse.cpp с использованием C-линковки
-extern bool notepad_open;
+// Импортируем общие C-переменные из mouse.cpp
+extern int explorer_x, explorer_y;
+extern int tasks_x, tasks_y;
+extern int notepad_x, notepad_y; 
+extern int explorer_scroll;
+
+extern bool explorer_open; 
+extern bool tasks_open;
+extern bool notepad_open;        
+extern char current_editing_file[20];
 extern char notepad_buffer[256];
-extern int notepad_ptr;
-void draw_all_ui();
 
-// Внутренние утилиты для строк командной строки
-bool kbd_str_compare(const char* s1, const char* s2) {
-    int i = 0;
-    while(s1[i] && s2[i]) { if(s1[i] != s2[i]) return false; i++; }
-    return s1[i] == s2[i];
-}
+extern DiskFileEntry file_table[MAX_DISK_FILES];
+extern Process process_table[MAX_PROCESSES];
+uint32_t get_file_count();
 
-bool kbd_str_starts(const char* str, const char* prefix) {
-    int i = 0;
-    while(prefix[i]) { if(str[i] != prefix[i]) return false; i++; }
-    return true;
-}
+void draw_explorer() {
+    if (!explorer_open) return;
 
-void execute_command() {
-    terminal_putchar('\n');
-    command_buffer[cmd_ptr] = '\0';
+    // Окно проводника
+    draw_rect(explorer_x, explorer_y, 420, 320, 0xDDDDDD); 
+    draw_rect(explorer_x, explorer_y, 420, 28, 0x444444);  
+    draw_string(explorer_x + 10, explorer_y + 8, "FILE EXPLORER", 0xFFFFFF);
+    
+    // Крестик закрытия
+    draw_rect(explorer_x + 395, explorer_y + 5, 20, 18, 0xAA0000);
+    draw_string(explorer_x + 402, explorer_y + 8, "X", 0xFFFFFF);
 
-    if (kbd_str_compare(command_buffer, "help")) {
-        terminal_writestring("Commands: ls, cat <file>, echo \"text\" > file, clear, reboot");
-    } 
-    else if (kbd_str_compare(command_buffer, "ls")) {
-        list_files();
-    }
-    else if (kbd_str_starts(command_buffer, "cat ")) {
-        char* filename = &command_buffer[4];
-        while (*filename == ' ') filename++;
-        read_from_disk(filename);
-    }
-    else if (kbd_str_starts(command_buffer, "echo \"")) {
-        char *text_start = 0, *text_end = 0, *filename = 0;
-        
-        for (int i = 0; i < cmd_ptr; i++) {
-            if (command_buffer[i] == '\"' && !text_start) text_start = &command_buffer[i+1];
-            else if (command_buffer[i] == '\"' && text_start) text_end = &command_buffer[i];
-            else if (command_buffer[i] == '>') filename = &command_buffer[i+1];
-        }
+    // Стрелочный надежный скроллбар
+    draw_rect(explorer_x + 395, explorer_y + 28, 25, 25, 0x999999);  // ВВЕРХ
+    draw_string(explorer_x + 404, explorer_y + 34, "^", 0x000000);
+    draw_rect(explorer_x + 395, explorer_y + 53, 25, 207, 0xBBBBBB); // Трек
+    draw_rect(explorer_x + 397, explorer_y + 55 + (explorer_scroll * 15), 21, 25, 0x777777); // Ползунок
+    draw_rect(explorer_x + 395, explorer_y + 260, 25, 25, 0x999999); // ВНИЗ
+    draw_string(explorer_x + 404, explorer_y + 266, "V", 0x000000);
 
-        if (text_start && text_end && filename) {
-            *text_end = '\0'; 
-            while (*filename == ' ') filename++; 
-            write_to_disk(filename, text_start);
-        } else {
-            terminal_writestring("Usage: echo \"text\" > file");
-        }
-    }
-    else if (kbd_str_compare(command_buffer, "clear")) {
-        terminal_clear();
-    }
-    else if (kbd_str_compare(command_buffer, "reboot")) {
-        sys_reboot();
-    }
-    else if (cmd_ptr > 0) {
-        terminal_writestring("MouseCore: Command not found.");
-    }
+    // Кнопка создания файла
+    draw_rect(explorer_x + 15, explorer_y + 285, 100, 24, 0x00AA55);
+    draw_string(explorer_x + 25, explorer_y + 293, "NEW FILE", 0xFFFFFF);
 
-    terminal_writestring("\nMouseCore# ");
-    cmd_ptr = 0;
-}
+    uint32_t count = get_file_count();
+    int cur_y = explorer_y + 40;
 
-// ИСПРАВЛЕНО: Главный обработчик прерывания клавиатуры (теперь жестко привязан к extern "C")
-void keyboard_handler_main() {
-    uint8_t scancode = inb(0x60);
+    if (count == 0) {
+        draw_string(explorer_x + 20, cur_y, "EMPTY DISK", 0x777777);
+    } else {
+        int visible_count = 0;
+        int skipped_files = 0;
 
-    if (scancode == 0x2A || scancode == 0x36) shift_held = true;
-    else if (scancode == 0xAA || scancode == 0xB6) shift_held = false;
-    else if (!(scancode & 0x80)) {
-        char c = shift_held ? kbd_map_shift[scancode] : kbd_map[scancode];
-        
-        if (notepad_open) {
-            if (c == '\b' && notepad_ptr > 0) { 
-                notepad_ptr--;
-                notepad_buffer[notepad_ptr] = '\0';
-                draw_all_ui(); 
-            } 
-            else if (c >= ' ' && notepad_ptr < 250) { 
-                notepad_buffer[notepad_ptr++] = c;
-                notepad_buffer[notepad_ptr] = '\0';
-                draw_all_ui(); 
-            }
-        } 
-        else {
-            if (c == '\n') execute_command();
-            else if (c == '\b' && cmd_ptr > 0) {
-                cmd_ptr--;
-                terminal_putchar('\b');
-            } else if (c >= ' ' && cmd_ptr < 127) {
-                command_buffer[cmd_ptr++] = c;
-                terminal_putchar(c);
+        for (int i = 0; i < MAX_DISK_FILES; i++) {
+            if (file_table[i].flags == 1) {
+                if (skipped_files < explorer_scroll) {
+                    skipped_files++;
+                    continue;
+                }
+
+                if (visible_count < 9) {
+                    draw_string(explorer_x + 20, cur_y, "[FILE] ", 0x0000FF);
+                    draw_string(explorer_x + 80, cur_y, file_table[i].name, 0x000000);
+                    cur_y += 24;
+                    visible_count++;
+                }
             }
         }
     }
-    outb(0x20, 0x20);
+}
+
+void draw_notepad() {
+    if (!notepad_open) return;
+
+    draw_rect(notepad_x, notepad_y, 400, 250, 0xF5F5F5); 
+    draw_rect(notepad_x, notepad_y, 400, 28, 0x0055AA);   
+    draw_string(notepad_x + 10, notepad_y + 8, "EDIT:", 0xFFFFFF);
+    draw_string(notepad_x + 60, notepad_y + 8, current_editing_file, 0xFFFF00); 
+
+    draw_rect(notepad_x + 375, notepad_y + 5, 20, 18, 0xAA0000);
+    draw_string(notepad_x + 382, notepad_y + 8, "X", 0xFFFFFF);
+
+    draw_rect(notepad_x + 10, notepad_y + 38, 380, 170, 0xFFFFFF);
+    
+    if (notepad_buffer[0] == '\0') {
+        draw_string(notepad_x + 15, notepad_y + 45, "TYPE TEXT HERE...", 0xCCCCCC);
+    } else {
+        draw_string(notepad_x + 15, notepad_y + 45, notepad_buffer, 0x000000);
+    }
+
+    draw_rect(notepad_x + 15, notepad_y + 215, 80, 24, 0x00AA55);
+    draw_string(notepad_x + 35, notepad_y + 223, "SAVE", 0xFFFFFF);
+}
+
+void draw_task_manager() {
+    if (!tasks_open) return;
+
+    draw_rect(tasks_x, tasks_y, 300, 250, 0xEEEEEE); 
+    draw_rect(tasks_x, tasks_y, 300, 28, 0x555555); 
+    draw_string(tasks_x + 10, tasks_y + 8, "TASK MANAGER", 0xFFFFFF);
+
+    draw_rect(tasks_x + 275, tasks_y + 5, 20, 18, 0xAA0000);
+    draw_string(tasks_x + 282, tasks_y + 8, "X", 0xFFFFFF);
+
+    int cur_y = tasks_y + 40;
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        if (process_table[i].state != PROCESS_STOPPED) {
+            char pid_str[8] = "PID: 0 ";
+            pid_str[5] = '0' + (process_table[i].pid % 10);
+
+            draw_string(tasks_x + 15, cur_y, pid_str, 0x0000FF);
+            draw_string(tasks_x + 75, cur_y, process_table[i].name, 0x000000);
+            cur_y += 22;
+        }
+    }
 }
 
 } // extern "C"
